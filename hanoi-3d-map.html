@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bản đồ 3D Hà Nội</title>
+<link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
+<style>
+:root{--red:#9b1c1c;--red2:#c0392b;--gold:#c9a227;--glass:rgba(255,248,235,.72);--ink:#3b1a14}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;font-family:"Segoe UI",system-ui,sans-serif;color:var(--ink)}
+#map{position:absolute;inset:0}
+.glass{background:var(--glass);backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);border:1px solid rgba(201,162,39,.55);box-shadow:0 8px 30px rgba(80,20,10,.25);border-radius:16px}
+#side{position:absolute;top:14px;left:14px;width:260px;max-height:calc(100% - 28px);overflow:auto;padding:14px;z-index:5}
+#side h1{font-size:18px;color:var(--red);letter-spacing:.5px;border-bottom:2px solid var(--gold);padding-bottom:8px;margin-bottom:10px}
+#side h1 small{display:block;font-size:11px;font-weight:400;color:#7a5a3a;letter-spacing:1px;text-transform:uppercase}
+.item{display:flex;gap:10px;align-items:center;width:100%;padding:9px 10px;margin:3px 0;border:0;border-radius:10px;background:transparent;color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer;transition:.2s}
+.item:hover{background:rgba(192,57,43,.12)}
+.item.active{background:linear-gradient(90deg,var(--red),var(--red2));color:#fff6df}
+.item i{flex:none;width:24px;height:24px;border-radius:50%;background:var(--gold);color:var(--red);font-style:normal;font-weight:700;font-size:12px;display:grid;place-items:center}
+#view{position:absolute;top:14px;right:64px;z-index:5;padding:10px 16px;border:1px solid var(--gold);cursor:pointer;font:inherit;font-weight:600;color:#fff6df;background:linear-gradient(135deg,var(--red),var(--red2));border-radius:999px;box-shadow:0 6px 18px rgba(120,20,10,.35)}
+#card{position:absolute;right:14px;bottom:30px;width:340px;max-width:calc(100% - 28px);overflow:hidden;z-index:6;transform:translateY(130%);opacity:0;transition:.45s cubic-bezier(.2,.8,.2,1)}
+#card.show{transform:none;opacity:1}
+#card .img{height:180px;background:linear-gradient(135deg,var(--red),var(--gold)) center/cover}
+#card .body{padding:14px 16px 16px}
+#card h2{font-size:20px;color:var(--red)}
+#card .year{display:inline-block;margin:6px 0 8px;padding:2px 10px;border-radius:999px;background:var(--gold);color:#4a1208;font-size:12px;font-weight:700}
+#card p{font-size:14px;line-height:1.55}
+#close{position:absolute;top:8px;right:8px;width:30px;height:30px;border:0;border-radius:50%;background:rgba(0,0,0,.45);color:#fff;font-size:18px;cursor:pointer}
+.pin{width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:linear-gradient(135deg,var(--red2),var(--red));border:2px solid var(--gold);box-shadow:0 4px 10px rgba(0,0,0,.4);cursor:pointer;display:grid;place-items:center;transition:filter .2s}
+.pin span{transform:rotate(45deg);color:#ffe9a8;font-weight:700;font-size:13px}
+.pin:hover,.pin.active{filter:brightness(1.25) drop-shadow(0 0 8px var(--gold))}
+.maplibregl-ctrl-top-right{top:6px}
+@media(max-width:700px){
+ #side{top:auto;bottom:0;left:0;right:0;width:100%;max-height:none;border-radius:16px 16px 0 0;display:flex;gap:6px;overflow-x:auto;padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
+ #side h1{display:none}
+ .item{width:auto;white-space:nowrap;flex:none;border:1px solid rgba(201,162,39,.5);margin:0}
+ #view{top:calc(10px + env(safe-area-inset-top));right:56px;padding:8px 12px;font-size:13px}
+ #card{bottom:74px;right:50%;transform:translate(50%,130%)}
+ #card.show{transform:translate(50%,0)}
+ #card .img{height:130px}
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<aside id="side" class="glass">
+  <h1>Hà Nội 3D<small>Thăng Long · Ngàn năm văn hiến</small></h1>
+  <div id="list"></div>
+</aside>
+
+<button id="view" title="Chuyển chế độ xem">🧭 Chế độ 2D</button>
+
+<section id="card" class="glass">
+  <button id="close" aria-label="Đóng">×</button>
+  <div class="img" id="cImg"></div>
+  <div class="body">
+    <h2 id="cName"></h2>
+    <span class="year" id="cYear"></span>
+    <p id="cDesc"></p>
+  </div>
+</section>
+
+<script>
+const PLACES = [
+ {name:"Hồ Hoàn Kiếm",year:"Thế kỷ 15 (truyền thuyết Lê Lợi trả gươm)",wiki:"Hồ_Hoàn_Kiếm",lngLat:[105.8525,21.0287],zoom:16.3,bearing:-20,pitch:62,
+  desc:"Trái tim của Thủ đô, gắn với truyền thuyết vua Lê Thái Tổ trả gươm thần cho Rùa Vàng. Giữa hồ là Tháp Rùa, bên bờ là đền Ngọc Sơn và cầu Thê Húc đỏ thắm."},
+ {name:"Lăng Chủ tịch Hồ Chí Minh",year:"1973 – 1975",wiki:"Lăng_Chủ_tịch_Hồ_Chí_Minh",lngLat:[105.8346,21.0368],zoom:16.8,bearing:30,pitch:60,
+  desc:"Công trình nơi an nghỉ của Chủ tịch Hồ Chí Minh tại Quảng trường Ba Đình, nơi Người đọc Tuyên ngôn Độc lập ngày 2/9/1945. Kiến trúc trang nghiêm, lấy cảm hứng từ hoa sen."},
+ {name:"Văn Miếu – Quốc Tử Giám",year:"1070",wiki:"Văn_Miếu_-_Quốc_Tử_Giám",lngLat:[105.8355,21.0274],zoom:17,bearing:-35,pitch:60,
+  desc:"Được vua Lý Thánh Tông xây dựng để thờ Khổng Tử; năm 1076 lập Quốc Tử Giám – trường đại học đầu tiên của Việt Nam. Nổi tiếng với 82 bia tiến sĩ trên lưng rùa đá."},
+ {name:"Hoàng thành Thăng Long",year:"Năm 1010 (nhà Lý)",wiki:"Hoàng_thành_Thăng_Long",lngLat:[105.8400,21.0367],zoom:16.6,bearing:15,pitch:60,
+  desc:"Di sản Thế giới UNESCO (2010), trung tâm quyền lực của Việt Nam hơn một nghìn năm. Còn lưu giữ Đoan Môn, Cột cờ Hà Nội, điện Kính Thiên và khu khảo cổ 18 Hoàng Diệu."},
+ {name:"Chùa Một Cột",year:"1049 (nhà Lý), trùng tu 1955",wiki:"Chùa_Một_Cột",lngLat:[105.8334,21.0359],zoom:18,bearing:40,pitch:65,
+  desc:"Ngôi chùa có kiến trúc độc đáo như đóa sen nở trên mặt nước, dựng theo giấc mộng thấy Phật Bà Quan Âm ngự trên toà sen của vua Lý Thái Tông."},
+ {name:"Nhà hát Lớn Hà Nội",year:"1901 – 1911",wiki:"Nhà_hát_Lớn_Hà_Nội",lngLat:[105.8579,21.0243],zoom:17.4,bearing:-50,pitch:62,
+  desc:"Công trình kiến trúc Pháp lấy cảm hứng từ Opéra Garnier (Paris), biểu tượng kiến trúc thuộc địa của Hà Nội và là nơi diễn ra Cách mạng Tháng Tám 1945."},
+ {name:"Cầu Long Biên",year:"1898 – 1902",wiki:"Cầu_Long_Biên",lngLat:[105.8604,21.0431],zoom:16.2,bearing:60,pitch:64,
+  desc:"Cây cầu thép bắc qua sông Hồng do Pháp xây dựng, thiết kế bởi công ty Daydé & Pillé, từng là một trong những cây cầu dài nhất châu Á, chứng nhân nhiều biến cố lịch sử."},
+ {name:"Hồ Tây",year:"Hình thành từ sông Hồng cổ; vùng chùa Trấn Quốc từ thế kỷ 6",wiki:"Hồ_Tây",lngLat:[105.8230,21.0583],zoom:14.8,bearing:-10,pitch:58,
+  desc:"Hồ nước ngọt lớn nhất nội đô Hà Nội, rộng hơn 500 ha, bao quanh bởi chùa Trấn Quốc, phủ Tây Hồ và những con đường ngắm hoàng hôn nổi tiếng."}
+];
+const HOME = {center:[105.8525,21.0287],zoom:15.5,pitch:60,bearing:0};
+
+const map = new maplibregl.Map({
+  container:"map",
+  style:"https://tiles.openfreemap.org/styles/liberty",
+  ...HOME, maxPitch:75, antialias:true
+});
+map.addControl(new maplibregl.NavigationControl({visualizePitch:true}),"top-right");
+
+const $ = id => document.getElementById(id);
+const listEl = $("list"), card = $("card");
+const items=[], pins=[], imgCache={};
+let active=-1;
+
+PLACES.forEach((p,i)=>{
+  // Menu trái
+  const b=document.createElement("button");
+  b.className="item"; b.innerHTML=`<i>${i+1}</i><span>${p.name}</span>`;
+  b.onclick=()=>select(i); listEl.appendChild(b); items.push(b);
+  // Marker
+  const el=document.createElement("div");
+  el.className="pin"; el.innerHTML=`<span>${i+1}</span>`; el.title=p.name;
+  el.addEventListener("click",e=>{e.stopPropagation();select(i)});
+  new maplibregl.Marker({element:el,anchor:"bottom"}).setLngLat(p.lngLat).addTo(map);
+  pins.push(el);
+});
+
+async function getImage(p){
+  if(imgCache[p.wiki]!==undefined) return imgCache[p.wiki];
+  try{
+    const r=await fetch("https://vi.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(p.wiki));
+    const j=await r.json();
+    return imgCache[p.wiki]=(j.originalimage&&j.thumbnail?j.thumbnail.source.replace(/\/\d+px-/,"/800px-"):(j.thumbnail&&j.thumbnail.source))||"";
+  }catch(e){return imgCache[p.wiki]="";}
+}
+
+async function select(i){
+  const p=PLACES[i]; active=i;
+  items.forEach((b,k)=>b.classList.toggle("active",k===i));
+  pins.forEach((el,k)=>el.classList.toggle("active",k===i));
+  items[i].scrollIntoView({block:"nearest",inline:"center",behavior:"smooth"});
+  map.flyTo({center:p.lngLat,zoom:p.zoom,pitch:viewMode==="2d"?0:p.pitch,bearing:viewMode==="2d"?0:p.bearing,speed:.8,curve:1.5,essential:true});
+  $("cName").textContent=p.name; $("cYear").textContent="Năm xây dựng: "+p.year; $("cDesc").textContent=p.desc;
+  $("cImg").style.backgroundImage="none";
+  card.classList.add("show");
+  const url=await getImage(p);
+  if(active===i && url) $("cImg").style.backgroundImage=`url("${url}")`;
+}
+
+$("close").onclick=()=>{card.classList.remove("show");active=-1;items.forEach(b=>b.classList.remove("active"));pins.forEach(e=>e.classList.remove("active"));};
+
+// Chuyển 3D / 2D
+let viewMode="3d";
+$("view").onclick=()=>{
+  viewMode = viewMode==="3d" ? "2d" : "3d";
+  $("view").textContent = viewMode==="3d" ? "🧭 Chế độ 2D" : "🏙️ Chế độ 3D";
+  map.easeTo({pitch:viewMode==="2d"?0:(active>=0?PLACES[active].pitch:60),bearing:viewMode==="2d"?0:(active>=0?PLACES[active].bearing:0),duration:1200});
+};
+</script>
+</body>
+</html>
