@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bản đồ 3D Hà Nội</title>
-<link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet">
-<script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
+<link href="https://jsdelivr.net" rel="stylesheet">
+<script src="https://jsdelivr.net"></script>
 <style>
-:root{--red:#9b1c1c;--red2:#c0392b;--gold:#c9a227;--glass:rgba(255,248,235,.72);--ink:#3b1a14}
+:root{--red:#9b1c1c;--red2:#c0392b;--gold:#c9a227;--glass:rgba(255,248,235,.82);--ink:#3b1a14}
 *{box-sizing:border-box;margin:0}
-html,body{height:100%;font-family:"Segoe UI",system-ui,sans-serif;color:var(--ink)}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color:var(--ink)}
 #map{position:absolute;inset:0}
 .glass{background:var(--glass);backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);border:1px solid rgba(201,162,39,.55);box-shadow:0 8px 30px rgba(80,20,10,.25);border-radius:16px}
 #side{position:absolute;top:14px;left:14px;width:260px;max-height:calc(100% - 28px);overflow:auto;padding:14px;z-index:5}
@@ -94,14 +94,13 @@ map.addControl(new maplibregl.NavigationControl({visualizePitch:true}),"top-righ
 const $ = id => document.getElementById(id);
 const listEl = $("list"), card = $("card");
 const items=[], pins=[], imgCache={};
-let active=-1;
+let active=-1, is3D=true;
 
 PLACES.forEach((p,i)=>{
-  // Menu trái
   const b=document.createElement("button");
   b.className="item"; b.innerHTML=`<i>${i+1}</i><span>${p.name}</span>`;
   b.onclick=()=>select(i); listEl.appendChild(b); items.push(b);
-  // Marker
+
   const el=document.createElement("div");
   el.className="pin"; el.innerHTML=`<span>${i+1}</span>`; el.title=p.name;
   el.addEventListener("click",e=>{e.stopPropagation();select(i)});
@@ -119,26 +118,42 @@ async function getImage(p){
 }
 
 async function select(i){
-  const p=PLACES[i]; active=i;
-  items.forEach((b,k)=>b.classList.toggle("active",k===i));
-  pins.forEach((el,k)=>el.classList.toggle("active",k===i));
-  items[i].scrollIntoView({block:"nearest",inline:"center",behavior:"smooth"});
-  map.flyTo({center:p.lngLat,zoom:p.zoom,pitch:viewMode==="2d"?0:p.pitch,bearing:viewMode==="2d"?0:p.bearing,speed:.8,curve:1.5,essential:true});
-  $("cName").textContent=p.name; $("cYear").textContent="Năm xây dựng: "+p.year; $("cDesc").textContent=p.desc;
-  $("cImg").style.backgroundImage="none";
+  active=i;
+  const p=PLACES[i];
+  items.forEach((el,idx)=>el.classList.toggle("active",idx===i));
+  pins.forEach((el,idx)=>el.classList.toggle("active",idx===i));
+
+  map.flyTo({
+    center:p.lngLat,
+    zoom:p.zoom,
+    bearing:is3D?p.bearing:0,
+    pitch:is3D?p.pitch:0,
+    speed:1.2
+  });
+
+  $("cName").textContent=p.name;
+  $("cYear").textContent=p.year;
+  $("cDesc").textContent=p.desc;
+  $("cImg").style.backgroundImage="";
   card.classList.add("show");
+
   const url=await getImage(p);
-  if(active===i && url) $("cImg").style.backgroundImage=`url("${url}")`;
+  if(active===i && url){
+    $("cImg").style.backgroundImage=`url("${url}")`;
+  }
 }
 
-$("close").onclick=()=>{card.classList.remove("show");active=-1;items.forEach(b=>b.classList.remove("active"));pins.forEach(e=>e.classList.remove("active"));};
+$("close").onclick=()=>{
+  card.classList.remove("show");
+  items.forEach(el=>el.classList.remove("active"));
+  pins.forEach(el=>el.classList.remove("active"));
+  active=-1;
+};
 
-// Chuyển 3D / 2D
-let viewMode="3d";
 $("view").onclick=()=>{
-  viewMode = viewMode==="3d" ? "2d" : "3d";
-  $("view").textContent = viewMode==="3d" ? "🧭 Chế độ 2D" : "🏙️ Chế độ 3D";
-  map.easeTo({pitch:viewMode==="2d"?0:(active>=0?PLACES[active].pitch:60),bearing:viewMode==="2d"?0:(active>=0?PLACES[active].bearing:0),duration:1200});
+  is3D=!is3D;
+  $("view").textContent=is3D?"🧭 Chế độ 2D":"🏙️ Chế độ 3D";
+  map.easeTo({pitch:is3D?60:0,bearing:is3D?-20:0,duration:800});
 };
 </script>
 </body>
